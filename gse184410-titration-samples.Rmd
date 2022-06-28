@@ -1,0 +1,100 @@
+---
+title: "Format GEO GSE184410 Titration Dataset"
+author: "ks"
+date: "6/28/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(purrr)
+library(GEOquery)
+```
+# {.tabset}
+
+## Mouse DNAm
+
+We want to oragnize the data into a list object, mmdat, with two matrices:    
+* dnam for the methylatiobn data  (external file for GSE184410)
+* targets for sample annotation  (sent from Wanding) 
+
+DNA methylaton data (GSE184410_20210916_GEO_processed_matrix.csv.gz) were downloaded by clicking (ftp) on website:  https://0-www-ncbi-nlm-nih-gov.brum.beds.ac.uk/geo/query/acc.cgi?acc=GSE184410
+```{r dnam-data}
+library(data.table)
+dt = fread("~kims/GitHub/mouseDNAm/data/GSE184410_20210916_GEO_processed_matrix.csv.gz")
+dim(dt)
+```
+
+```{r show}
+dt[1:3,1:7]
+```
+
+These data are stored as the barcode for the sample followed by the detection pvalue.  We'll need to get the barcodes from GEO and link those to the GSM numbers Wanding sent us.
+
+First we load the GSM and input data quantities that Wanding sent.
+```{r targets}
+GSMids <- read_xlsx("~kims/GitHub/mouseDNAm/data/20210226_MouseArray_inputQuantity.xlsx")
+dim(GSMids)
+```
+
+The barcode is stored as pData(gse)$description.1 from the GEO dataset. Let's get that next.
+
+```{r inputq}
+gse184410<-getGEO('GSE184410',GSEMatrix=FALSE)
+```
+
+```{r subset}
+idx <- match(GSMids$GSM,pData(gse)$geo_accession)
+pData(gse)[idx,]
+```
+
+Next let's merge the 2 files with sample annotation information. From the GSE dataset let's save the following variables: geo_assession, 'cell line:ch1', strain:ch1, description.1. 
+We'll merge that with the variable `DNA_input(ng)` from Wanding's excel file. 
+
+```{r sampleannot}
+gsecov <- pData(gse) %>%
+            filter(is.element(pData(gse)$geo_accession,GSMids$GSM))  %>%
+            select(geo_accession,
+                   cell.line =`cell line:ch1`,
+                   strain = `strain:ch1`,
+                   barcode = description.1)
+mmdat <- NULL
+mmdat$targets <- left_join(GSMids,gsecov,
+                     by = c("GSM"= "geo_accession"))
+mmdat$targets
+rm(gsecov)
+```
+
+Now let's add the DNA methylation data for these specific arrays to our data object: mmdat. 
+
+```{r dnam-subset}
+bcidx <- match(targets$barcode,colnames(dt))
+dpidx <- bcidx  + 1
+
+mmdat$dnam <- cbind(ID_REF = dt$ID_REF,
+                    dt[,..bcidx])
+mmdat$det.p <- cbind(ID_REF = dt$ID_REF,
+                     dt[,..dpidx])
+colnames(mmdat$det.p) = colnames(mmdat$dnam)
+```
+
+Let's look at how this appears:
+
+```{r dnam-look}
+dt[1:2,bcidx[1]:(bcidx[1]+8)]
+mmdat$dnam[1:2,1:4]
+mmdat$det.p[1:2,1:4]
+```
+
+Let's save this data set for future use.
+```{r savedata}
+save(mmdat,file = "data/mmdat.rda")
+```
+
+
+
+```{r sessionInfo}
+sessionInfo()
+```
+
