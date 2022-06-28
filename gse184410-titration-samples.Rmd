@@ -92,6 +92,19 @@ Let's save this data set for future use.
 save(mmdat,file = "data/mmdat.rda")
 ```
 
+Let's check the number and types of features that are on the array.
+
+```{r feature-type}
+nrow(mmdat$dnam)
+```
+
+The paper mentions 297415 features, so we have fewer here for some reason. I won't worry about this discrepancy for now.
+
+Here are the different types of features:
+
+```{r feature-type}
+table(substr(unlist(mmdat$dnam[,"ID_REF"]),1,2))
+```
 
 
 ```{r sessionInfo}
